@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Family Tasks Pro</title>
     
-    <!-- Script necessari (versioni stabili) -->
+    <!-- Librerie esterne necessarie -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -19,17 +19,16 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Outfit:wght@100..900&display=swap');
         
-        :root { --ion-safe-area-top: env(safe-area-inset-top); }
+        :root { --safe-top: env(safe-area-inset-top); }
         
         body { 
-            margin: 0; 
-            padding: 0; 
-            overflow: hidden; 
-            -webkit-user-select: none; 
-            user-select: none;
+            margin: 0; padding: 0; overflow: hidden; 
+            -webkit-user-select: none; user-select: none;
             background-color: #000;
+            height: 100vh;
         }
 
+        /* Classi Font Personalizzate */
         .font-sans { font-family: 'Outfit', sans-serif; }
         .font-serif { font-family: 'Playfair Display', serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
@@ -38,11 +37,10 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         * { -webkit-tap-highlight-color: transparent; outline: none; }
         
-        .safe-top { padding-top: var(--ion-safe-area-top); }
-        
-        /* Animazioni */
         .fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .active-scale:active { transform: scale(0.95); }
     </style>
 </head>
 <body>
@@ -51,7 +49,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // Componente Icona Sicuro per PWA
+        // Componente per le icone Lucide
         const Icon = ({ name, size = 24, className = "" }) => {
             const iconRef = useRef(null);
             useEffect(() => {
@@ -72,36 +70,70 @@
             { id: 'low', label: 'Bassa', color: 'bg-emerald-500', text: 'text-emerald-500' },
         ];
 
-        const THEMES = [
+        const BACKGROUNDS = [
             { id: 'light', name: 'Minimal', class: 'bg-slate-50 text-slate-900', card: 'bg-white/80 border-slate-200' },
             { id: 'dark', name: 'Night', class: 'bg-slate-950 text-white', card: 'bg-white/10 border-white/10' },
             { id: 'aurora', name: 'Aurora', class: 'bg-gradient-to-br from-emerald-400 to-cyan-500 text-white', card: 'bg-white/20 border-white/20' },
-            { id: 'rose', name: 'Rose', class: 'bg-gradient-to-br from-rose-400 to-purple-500 text-white', card: 'bg-white/20 border-white/20' }
+            { id: 'rose', name: 'Rose', class: 'bg-gradient-to-br from-rose-400 to-purple-500 text-white', card: 'bg-white/20 border-white/20' },
+            { id: 'ocean', name: 'Ocean', class: 'bg-gradient-to-br from-blue-600 to-indigo-900 text-white', card: 'bg-white/20 border-white/20' }
+        ];
+
+        const FONTS = [
+            { id: 'font-sans', name: 'Minimal' },
+            { id: 'font-serif', name: 'Classic' },
+            { id: 'font-mono', name: 'Modern' },
+            { id: 'font-rounded', name: 'Playful' }
         ];
 
         function App() {
+            // --- Stato ---
             const [isAuth, setIsAuth] = useState(false);
-            const [pin, setPin] = useState('');
-            const [tasks, setTasks] = useState([]);
-            const [view, setView] = useState('home');
-            const [activeTab, setActiveTab] = useState('todo');
-            const [theme, setTheme] = useState(THEMES[0]);
+            const [storedPin, setStoredPin] = useState(() => localStorage.getItem('family_pin') || '1234');
+            const [inputPin, setInputPin] = useState('');
+            const [tasks, setTasks] = useState(() => JSON.parse(localStorage.getItem('family_tasks') || '[]'));
+            const [view, setView] = useState('home'); // home, stats, settings
+            const [activeTab, setActiveTab] = useState('todo'); // create, todo, done
+            const [theme, setTheme] = useState(BACKGROUNDS[0]);
+            const [font, setFont] = useState(FONTS[0]);
+            const [sortBy, setSortBy] = useState('date');
+            
             const [newTask, setNewTask] = useState('');
             const [newPrio, setNewPrio] = useState('medium');
-            const [modal, setModal] = useState({ show: false, task: null });
+            const [modal, setModal] = useState({ show: false, type: '', task: null });
 
-            const SECRET_PIN = '1234';
+            // Cambio PIN
+            const [isChangingPin, setIsChangingPin] = useState(false);
+            const [changePinStep, setChangePinStep] = useState(1);
+            const [tempPinInput, setTempPinInput] = useState('');
+
+            // --- Effects ---
+            useEffect(() => { localStorage.setItem('family_tasks', JSON.stringify(tasks)); }, [tasks]);
+            useEffect(() => { localStorage.setItem('family_pin', storedPin); }, [storedPin]);
 
             useEffect(() => {
-                if (pin.length === 4) {
-                    if (pin === SECRET_PIN) {
-                        setTimeout(() => setIsAuth(true), 200);
+                if (inputPin.length === 4) {
+                    if (inputPin === storedPin) {
+                        setTimeout(() => { setIsAuth(true); setInputPin(''); }, 200);
                     } else {
-                        setTimeout(() => setPin(''), 400);
+                        setTimeout(() => setInputPin(''), 500);
                     }
                 }
-            }, [pin]);
+            }, [inputPin, storedPin]);
 
+            useEffect(() => {
+                if (tempPinInput.length === 4) {
+                    if (changePinStep === 1) {
+                        if (tempPinInput === storedPin) { setChangePinStep(2); setTempPinInput(''); }
+                        else { setTimeout(() => setTempPinInput(''), 500); }
+                    } else if (changePinStep === 2) {
+                        setStoredPin(tempPinInput);
+                        setChangePinStep(3);
+                        setTimeout(() => { setIsChangingPin(false); setChangePinStep(1); setTempPinInput(''); }, 1500);
+                    }
+                }
+            }, [tempPinInput]);
+
+            // --- Logic ---
             const addTask = () => {
                 if (!newTask.trim()) return;
                 const task = { id: Date.now(), text: newTask, prio: newPrio, done: false, date: new Date() };
@@ -110,34 +142,44 @@
                 setActiveTab('todo');
             };
 
+            const sortedTasks = useMemo(() => {
+                const filtered = tasks.filter(t => activeTab === 'todo' ? !t.done : t.done);
+                if (sortBy === 'priority') {
+                    const order = { high: 1, medium: 2, low: 3 };
+                    return [...filtered].sort((a, b) => order[a.prio] - order[b.prio]);
+                }
+                return [...filtered].sort((a, b) => b.id - a.id);
+            }, [tasks, activeTab, sortBy]);
+
             const stats = useMemo(() => ({
                 total: tasks.length,
                 done: tasks.filter(t => t.done).length,
-                pending: tasks.filter(t => !t.done).length,
+                todo: tasks.filter(t => !t.done).length,
                 urgent: tasks.filter(t => t.prio === 'high' && !t.done).length
             }), [tasks]);
 
+            // --- Render Login ---
             if (!isAuth) {
                 return (
                     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-100 p-8 font-sans">
                         <div className="bg-white p-10 rounded-[50px] shadow-2xl w-full max-w-sm text-center fade-in">
-                            <div className="w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-8">
-                                <Icon name="Lock" size={32} className="text-indigo-600" />
+                            <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <Icon name="Lock" size={28} className="text-indigo-600" />
                             </div>
-                            <h2 className="text-2xl font-black mb-10 tracking-tight italic">SECURITY</h2>
-                            <div className="flex justify-center gap-5 mb-12">
+                            <h2 className="text-xl font-black mb-8 tracking-tight italic uppercase">Accesso Famiglia</h2>
+                            <div className="flex justify-center gap-4 mb-10">
                                 {[...Array(4)].map((_, i) => (
-                                    <div key={i} className={`w-4 h-4 rounded-full border-2 transition-all ${pin.length > i ? 'bg-indigo-600 border-indigo-600 scale-125' : 'border-slate-200'}`} />
+                                    <div key={i} className={`w-3 h-3 rounded-full border-2 transition-all ${inputPin.length > i ? 'bg-indigo-600 border-indigo-600 scale-125' : 'border-slate-200'}`} />
                                 ))}
                             </div>
-                            <div className="grid grid-cols-3 gap-6">
-                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0, '←'].map(n => (
+                            <div className="grid grid-cols-3 gap-4">
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0, 'del'].map(n => (
                                     <button key={n} onClick={() => {
-                                        if (n === 'C') setPin('');
-                                        else if (n === '←') setPin(p => p.slice(0, -1));
-                                        else if (pin.length < 4) setPin(p => p + n);
-                                    }} className="h-16 w-16 mx-auto rounded-full text-2xl font-bold flex items-center justify-center active:bg-slate-100 active:scale-90 transition-all">
-                                        {n}
+                                        if (n === 'C') setInputPin('');
+                                        else if (n === 'del') setInputPin(p => p.slice(0, -1));
+                                        else if (inputPin.length < 4) setInputPin(p => p + n);
+                                    }} className="h-14 w-14 mx-auto rounded-full text-xl font-bold flex items-center justify-center active:bg-slate-100 active:scale-90 transition-all">
+                                        {n === 'del' ? '←' : n}
                                     </button>
                                 ))}
                             </div>
@@ -147,67 +189,74 @@
             }
 
             return (
-                <div className={`min-h-screen flex flex-col transition-all duration-500 ${theme.class} font-sans`}>
-                    <header className="px-6 pt-16 pb-6 flex justify-between items-end safe-top">
+                <div className={`min-h-screen flex flex-col transition-all duration-500 ${theme.class} ${font.id}`}>
+                    {/* Header */}
+                    <header className="px-6 pt-16 pb-4 flex justify-between items-end safe-top">
                         <div>
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-50 mb-1">
-                                {new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'short' })}
-                            </p>
-                            <h1 className="text-4xl font-black tracking-tighter italic uppercase">Tasks</h1>
+                            <p className="text-[9px] font-black uppercase tracking-[0.3em] opacity-40 mb-1">PROGETTO</p>
+                            <h1 className="text-3xl font-black tracking-tighter italic uppercase">Family Hub</h1>
                         </div>
-                        <button onClick={() => setView('settings')} className="p-4 rounded-3xl bg-white/20 backdrop-blur-md border border-white/20 active:scale-90 transition-all">
-                            <Icon name="Settings" size={24} />
+                        <button onClick={() => setView('settings')} className="p-3 rounded-2xl bg-white/20 backdrop-blur-md border border-white/20 active-scale transition-all">
+                            <Icon name="Settings" size={22} />
                         </button>
                     </header>
+
+                    {/* Navigation Tabs */}
+                    <div className="flex px-6 gap-2 mb-6">
+                        {['home', 'stats'].map(v => (
+                            <button key={v} onClick={() => setView(v)} className={`flex-1 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all ${view === v ? 'bg-white/20 shadow-lg' : 'opacity-30'}`}>
+                                {v === 'home' ? 'Task' : 'Dati'}
+                            </button>
+                        ))}
+                    </div>
 
                     <main className="flex-1 px-6 overflow-y-auto no-scrollbar pb-32">
                         {view === 'home' && (
                             <div className="fade-in">
-                                <div className="flex bg-black/5 p-1.5 rounded-[28px] backdrop-blur-md mb-8">
+                                {/* Sub Tabs */}
+                                <div className="flex bg-black/5 p-1 rounded-[24px] backdrop-blur-md mb-8">
                                     {['create', 'todo', 'done'].map(t => (
-                                        <button key={t} onClick={() => setActiveTab(t)} className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-[22px] transition-all ${activeTab === t ? 'bg-white text-indigo-600 shadow-xl' : 'opacity-40'}`}>
-                                            {t === 'create' ? 'Nuovo' : t === 'todo' ? 'Lista' : 'Fatti'}
+                                        <button key={t} onClick={() => setActiveTab(t)} className={`flex-1 py-3 text-[9px] font-black uppercase tracking-widest rounded-[18px] transition-all ${activeTab === t ? 'bg-white text-indigo-600 shadow-sm' : 'opacity-30'}`}>
+                                            {t === 'create' ? 'Aggiungi' : t === 'todo' ? 'Da fare' : 'Fatti'}
                                         </button>
                                     ))}
                                 </div>
 
-                                {activeTab === 'create' && (
-                                    <div className="bg-white rounded-[45px] p-8 shadow-2xl text-slate-900">
-                                        <textarea 
-                                            value={newTask} 
-                                            onChange={e => setNewTask(e.target.value)}
-                                            placeholder="Cosa vuoi fare?" 
-                                            className="w-full text-2xl font-bold border-none focus:ring-0 p-0 resize-none min-h-[150px] bg-transparent"
-                                        />
-                                        <div className="flex gap-2 mt-6">
+                                {activeTab === 'create' ? (
+                                    <div className="bg-white rounded-[40px] p-8 shadow-2xl text-slate-900 fade-in">
+                                        <textarea value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="Scrivi qui..." className="w-full text-xl font-bold border-none focus:ring-0 p-0 resize-none min-h-[140px] bg-transparent" />
+                                        <div className="flex gap-2 mt-4">
                                             {PRIORITIES.map(p => (
-                                                <button key={p.id} onClick={() => setNewPrio(p.id)} className={`flex-1 py-4 rounded-2xl border-2 transition-all ${newPrio === p.id ? `${p.color} border-transparent text-white` : 'bg-slate-50 border-transparent opacity-40'}`}>
-                                                    <span className="text-[9px] font-black uppercase">{p.label}</span>
+                                                <button key={p.id} onClick={() => setNewPrio(p.id)} className={`flex-1 py-3 rounded-xl border-2 transition-all ${newPrio === p.id ? `${p.color} border-transparent text-white` : 'bg-slate-50 border-transparent opacity-30'}`}>
+                                                    <span className="text-[8px] font-black uppercase">{p.label}</span>
                                                 </button>
                                             ))}
                                         </div>
-                                        <button onClick={addTask} disabled={!newTask.trim()} className="w-full mt-8 py-6 bg-indigo-600 text-white rounded-[30px] font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 disabled:opacity-20 transition-all">
+                                        <button onClick={addTask} disabled={!newTask.trim()} className="w-full mt-6 py-5 bg-indigo-600 text-white rounded-[24px] font-black uppercase tracking-widest text-[10px] shadow-xl active-scale disabled:opacity-20 transition-all">
                                             Salva Task
                                         </button>
                                     </div>
-                                )}
-
-                                {(activeTab === 'todo' || activeTab === 'done') && (
+                                ) : (
                                     <div className="space-y-4">
-                                        {tasks.filter(t => activeTab === 'todo' ? !t.done : t.done).map(t => (
-                                            <div key={t.id} className={`${theme.card} backdrop-blur-xl border p-5 rounded-[35px] flex items-center gap-4 shadow-sm fade-in`}>
-                                                <button onClick={() => setTasks(tasks.map(x => x.id === t.id ? {...x, done: !x.done} : x))} className={t.done ? 'text-green-400' : 'opacity-30'}>
-                                                    <Icon name={t.done ? "CheckCircle2" : "Circle"} size={28} />
+                                        <div className="flex justify-end">
+                                            <button onClick={() => setSortBy(sortBy === 'date' ? 'priority' : 'date')} className="text-[9px] font-black uppercase tracking-widest opacity-40 flex items-center gap-2">
+                                                <Icon name="ArrowUpDown" size={12} /> {sortBy === 'date' ? 'Per Data' : 'Per Priorità'}
+                                            </button>
+                                        </div>
+                                        {sortedTasks.map(t => (
+                                            <div key={t.id} className={`${theme.card} backdrop-blur-xl border p-5 rounded-[30px] flex items-center gap-4 fade-in`}>
+                                                <button onClick={() => setTasks(tasks.map(x => x.id === t.id ? {...x, done: !x.done} : x))} className={t.done ? 'text-green-400' : 'opacity-20'}>
+                                                    <Icon name={t.done ? "CheckCircle2" : "Circle"} size={26} />
                                                 </button>
                                                 <div className="flex-1">
-                                                    <p className={`text-lg font-bold leading-tight ${t.done ? 'line-through opacity-40' : ''}`}>{t.text}</p>
+                                                    <p className={`font-bold text-lg leading-tight ${t.done ? 'line-through opacity-30' : ''}`}>{t.text}</p>
                                                     <div className="flex items-center gap-2 mt-1">
-                                                        <div className={`w-2 h-2 rounded-full ${PRIORITIES.find(p => p.id === t.prio).color}`} />
-                                                        <span className="text-[9px] font-black uppercase opacity-40">{PRIORITIES.find(p => p.id === t.prio).label}</span>
+                                                        <div className={`w-1.5 h-1.5 rounded-full ${PRIORITIES.find(p => p.id === t.prio).color}`} />
+                                                        <span className="text-[8px] font-black uppercase opacity-30 tracking-widest">{PRIORITIES.find(p => p.id === t.prio).label}</span>
                                                     </div>
                                                 </div>
-                                                <button onClick={() => setModal({show: true, task: t})} className="opacity-20 hover:text-red-500 p-2">
-                                                    <Icon name="Trash2" size={20} />
+                                                <button onClick={() => setModal({show: true, type: 'delete', task: t})} className="opacity-10 p-2">
+                                                    <Icon name="Trash2" size={18} />
                                                 </button>
                                             </div>
                                         ))}
@@ -217,19 +266,18 @@
                         )}
 
                         {view === 'stats' && (
-                            <div className="fade-in space-y-6">
-                                <div className="bg-white/10 backdrop-blur-xl p-8 rounded-[45px] border border-white/20 text-center">
-                                    <h3 className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-8">Performance</h3>
+                            <div className="fade-in space-y-4">
+                                <div className="bg-white/20 backdrop-blur-xl p-8 rounded-[45px] border border-white/10 shadow-xl">
+                                    <h4 className="font-black text-[10px] uppercase tracking-[0.3em] mb-8 text-center opacity-50 italic">Report Settimanale</h4>
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-black/10 p-6 rounded-[35px]">
-                                            <p className="text-[9px] font-black uppercase opacity-40 mb-1">Fatti</p>
-                                            <h4 className="text-5xl font-black italic">{stats.done}</h4>
-                                        </div>
-                                        <div className="bg-black/10 p-6 rounded-[35px]">
-                                            <p className="text-[9px] font-black uppercase opacity-40 mb-1">Rimasti</p>
-                                            <h4 className="text-5xl font-black italic">{stats.pending}</h4>
-                                        </div>
+                                        <div className="text-center bg-black/5 p-5 rounded-3xl"><p className="text-[9px] font-black opacity-40 uppercase mb-1">Completati</p><h4 className="text-4xl font-black italic">{stats.done}</h4></div>
+                                        <div className="text-center bg-black/5 p-5 rounded-3xl"><p className="text-[9px] font-black opacity-40 uppercase mb-1">Da fare</p><h4 className="text-4xl font-black italic">{stats.todo}</h4></div>
                                     </div>
+                                </div>
+                                <div className="bg-indigo-600 p-8 rounded-[45px] text-white shadow-2xl">
+                                    <h4 className="font-black text-xl mb-1 italic uppercase tracking-tighter">Attenzione</h4>
+                                    <p className="text-xs opacity-70 mb-6">Ci sono {stats.urgent} task urgenti che aspettano te.</p>
+                                    <button onClick={() => { setView('home'); setActiveTab('todo'); setSortBy('priority'); }} className="w-full py-4 bg-white text-indigo-950 rounded-[22px] font-black uppercase text-[10px] tracking-[0.3em]">Gestisci</button>
                                 </div>
                             </div>
                         )}
@@ -237,39 +285,97 @@
                         {view === 'settings' && (
                             <div className="fade-in space-y-8">
                                 <section>
-                                    <h3 className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-4 px-2">Temi</h3>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {THEMES.map(t => (
-                                            <button key={t.id} onClick={() => setTheme(t)} className={`p-6 rounded-[35px] text-left border-2 transition-all ${theme.id === t.id ? 'border-white bg-white/20' : 'border-transparent bg-black/5 opacity-50'}`}>
-                                                <span className="text-[10px] font-black uppercase">{t.name}</span>
+                                    <h3 className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-4">Temi Visivi</h3>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {BACKGROUNDS.map(t => (
+                                            <button key={t.id} onClick={() => setTheme(t)} className={`p-5 rounded-[28px] text-left border-2 transition-all ${theme.id === t.id ? 'border-white bg-white/20' : 'border-transparent bg-black/5 opacity-40'}`}>
+                                                <span className="text-[9px] font-black uppercase">{t.name}</span>
                                             </button>
                                         ))}
                                     </div>
                                 </section>
-                                <button onClick={() => setIsAuth(false)} className="w-full py-4 bg-red-500/20 text-red-400 rounded-2xl font-black uppercase text-[10px] tracking-widest">Esci</button>
+
+                                <section>
+                                    <h3 className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-4">Stile Testo</h3>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {FONTS.map(f => (
+                                            <button key={f.id} onClick={() => setFont(f)} className={`p-5 rounded-[28px] text-left border-2 transition-all ${f.id} ${font.id === f.id ? 'border-white bg-white/20' : 'border-transparent bg-black/5 opacity-40'}`}>
+                                                <span className="text-[9px] font-black uppercase">{f.name}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </section>
+
+                                <section>
+                                    <h3 className="text-[10px] font-black uppercase tracking-widest opacity-40 mb-4">Privacy</h3>
+                                    <button onClick={() => setIsChangingPin(true)} className="w-full p-6 bg-black/5 rounded-[30px] flex justify-between items-center active-scale transition-all">
+                                        <div className="text-left">
+                                            <p className="text-[10px] font-black uppercase tracking-widest">Cambia PIN Segreto</p>
+                                            <p className="text-[8px] opacity-30 mt-1 uppercase">Attuale: ****</p>
+                                        </div>
+                                        <Icon name="KeyRound" size={20} className="opacity-30" />
+                                    </button>
+                                </section>
+
+                                <button onClick={() => setIsAuth(false)} className="w-full py-4 bg-red-500/20 text-red-400 rounded-2xl font-black uppercase text-[9px] tracking-widest">Chiudi Sessione</button>
                             </div>
                         )}
                     </main>
 
-                    <nav className="fixed bottom-0 left-0 right-0 h-24 bg-white/80 backdrop-blur-3xl border-t border-white/10 flex items-center justify-around px-10 pb-6 z-50">
-                        <button onClick={() => setView('home')} className={`p-4 transition-all ${view === 'home' ? 'text-indigo-600 scale-125' : 'text-slate-400 opacity-40'}`}>
-                            <Icon name="Home" size={28} />
+                    {/* Footer Nav */}
+                    <nav className="fixed bottom-0 left-0 right-0 h-24 bg-white/80 backdrop-blur-3xl border-t border-white/10 flex items-center justify-around px-8 pb-6 z-50">
+                        <button onClick={() => setView('home')} className={`p-4 ${view === 'home' ? 'text-indigo-600 scale-125' : 'text-slate-400 opacity-30'}`}>
+                            <Icon name="Home" size={24} />
                         </button>
-                        <button onClick={() => {setView('home'); setActiveTab('create');}} className="w-16 h-16 bg-indigo-600 text-white rounded-[24px] shadow-2xl flex items-center justify-center -mt-12 active:scale-90 transition-all border-4 border-white">
-                            <Icon name="Plus" size={32} />
+                        <button onClick={() => {setView('home'); setActiveTab('create');}} className="w-14 h-14 bg-indigo-600 text-white rounded-[20px] shadow-2xl flex items-center justify-center -mt-10 active-scale transition-all border-4 border-white">
+                            <Icon name="Plus" size={28} />
                         </button>
-                        <button onClick={() => setView('stats')} className={`p-4 transition-all ${view === 'stats' ? 'text-indigo-600 scale-125' : 'text-slate-400 opacity-40'}`}>
-                            <Icon name="BarChart3" size={28} />
+                        <button onClick={() => setView('stats')} className={`p-4 ${view === 'stats' ? 'text-indigo-600 scale-125' : 'text-slate-400 opacity-30'}`}>
+                            <Icon name="BarChart3" size={24} />
                         </button>
                     </nav>
 
+                    {/* Modal Cambio PIN */}
+                    {isChangingPin && (
+                        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-6 fade-in">
+                            <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => {setIsChangingPin(false); setChangePinStep(1); setTempPinInput('');}} />
+                            <div className="bg-white w-full max-w-sm rounded-[50px] p-10 relative text-center text-slate-900 shadow-2xl animate-in slide-in-from-bottom-20 duration-500">
+                                <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                                    <Icon name={changePinStep === 3 ? "ShieldCheck" : "KeyRound"} size={28} className="text-indigo-600" />
+                                </div>
+                                <h3 className="text-xl font-black uppercase italic mb-2">
+                                    {changePinStep === 1 ? 'PIN Attuale' : changePinStep === 2 ? 'Nuovo PIN' : 'Cambiato!'}
+                                </h3>
+                                <div className="flex justify-center gap-4 my-8">
+                                    {[...Array(4)].map((_, i) => (
+                                        <div key={i} className={`w-3 h-3 rounded-full border-2 transition-all ${tempPinInput.length > i ? 'bg-indigo-600 border-indigo-600 scale-125' : 'border-slate-200'}`} />
+                                    ))}
+                                </div>
+                                {changePinStep < 3 && (
+                                    <div className="grid grid-cols-3 gap-4">
+                                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'X', 0, 'del'].map(n => (
+                                            <button key={n} onClick={() => {
+                                                if (n === 'X') {setIsChangingPin(false); setChangePinStep(1); setTempPinInput('');}
+                                                else if (n === 'del') setTempPinInput(p => p.slice(0, -1));
+                                                else if (tempPinInput.length < 4) setTempPinInput(p => p + n);
+                                            }} className="h-12 w-12 mx-auto rounded-full text-lg font-bold flex items-center justify-center active:bg-slate-100 transition-all">
+                                                {n === 'del' ? '←' : n}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Modal Azioni Task */}
                     {modal.show && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 fade-in">
-                            <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setModal({show: false, task: null})} />
-                            <div className="bg-white w-full max-w-xs rounded-[50px] p-10 relative text-center text-slate-900 shadow-2xl">
-                                <h3 className="text-2xl font-black uppercase italic mb-2">Elimina?</h3>
-                                <button onClick={() => {setTasks(tasks.filter(x => x.id !== modal.task.id)); setModal({show: false, task: null});}} className="w-full py-5 bg-red-500 text-white rounded-[25px] font-black uppercase text-[10px] tracking-widest mb-3">Sì, Elimina</button>
-                                <button onClick={() => setModal({show: false, task: null})} className="w-full py-5 bg-slate-50 text-slate-400 rounded-[25px] font-black uppercase text-[10px] tracking-widest">Annulla</button>
+                            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setModal({show: false, type: '', task: null})} />
+                            <div className="bg-white w-full max-w-xs rounded-[40px] p-8 relative text-center text-slate-900 shadow-2xl">
+                                <h3 className="text-xl font-black uppercase italic mb-6">Eliminare?</h3>
+                                <button onClick={() => {setTasks(tasks.filter(x => x.id !== modal.task.id)); setModal({show: false, type: '', task: null});}} className="w-full py-4 bg-red-500 text-white rounded-2xl font-black uppercase text-[9px] tracking-widest mb-2">Conferma</button>
+                                <button onClick={() => setModal({show: false, type: '', task: null})} className="w-full py-4 bg-slate-50 text-slate-400 rounded-2xl font-black uppercase text-[9px] tracking-widest">Annulla</button>
                             </div>
                         </div>
                     )}
@@ -281,5 +387,4 @@
         root.render(<App />);
     </script>
 </body>
-
 </html>
